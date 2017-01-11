@@ -1,0 +1,27 @@
+{
+  "name": "senator-vote-history",
+  "version": "1.0.0",
+  "description": "view the voting history of your senator",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chrisjwei/senator-vote-history.git"
+  },
+  "keywords": [
+    "vote",
+    "senate",
+    "US"
+  ],
+  "author": "Christopher Wei",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/chrisjwei/senator-vote-history/issues"
+  },
+  "homepage": "https://github.com/chrisjwei/senator-vote-history#readme",
+  "dependencies": {
+    "express": "^4.14.0"
+  }
+}
