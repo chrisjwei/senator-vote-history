@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import pickle
 import psycopg2
 import urlparse
+import os
 
 class RequestFailedException(Exception):
     pass
@@ -185,16 +186,8 @@ def populate_database(conn):
                 (rc.id, v.first_name, v.last_name, v.party, v.state, v.vote_cast, v.lis_member_id))
         conn.commit()
 
-
-
-
-#scrape_init()
-#scrape()
-#populate_database()
-
-# initialize the connection with our database
-urlparse.uses_netloc.append("postgres")
-url = urlparse.urlparse(os.environ["DATABASE_URL"])
+#urlparse.uses_netloc.append("postgres")
+#url = urlparse.urlparse(os.environ["DATABASE_URL"])
 
 conn = psycopg2.connect(
     database=url.path[1:],

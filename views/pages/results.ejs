@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <% include ../partials/header.ejs %>
+</head>
+
+<body>
+<% include ../partials/nav.ejs %>
+<div class="container">
+<% results.forEach(function(r) { %>
+        <% if (r.vote_cast == "Yea"){ %>
+            <div class="panel panel-success">
+        <%} else if (r.vote_cast == "Nay"){ %>
+            <div class="panel panel-danger">
+        <%} else {%>
+            <div class="panel panel-default">
+        <% } %>
+            <div class="panel-heading"><b><%= r.first_name %> <%= r.last_name %> </b> voted <b> <%= r.vote_cast %> </b> to</div>
+            <div class="panel-body">
+                <a href="<%= r.url %>"><h4><%= r.vote_title %></h4></a>
+                <p><%= r.vote_document_text %></p>
+            </div>
+        </div>            
+<% }); %>
+</div>
+</body>
+</html>
