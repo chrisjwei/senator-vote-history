@@ -4,6 +4,8 @@ import time
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 import pickle
+import psycopg2
+import urlparse
 
 class RequestFailedException(Exception):
     pass
@@ -26,8 +28,6 @@ class RollCall(object):
         self.count = d["count"]
         self.tie_breaker = d["tie_breaker"]
         self.members = d["members"]
-        
-
         self.id = "%d-%d-%d" % (self.congress, self.session, self.vote_number)
 
 class Vote(object):
@@ -38,6 +38,40 @@ class Vote(object):
         self.state = d["state"]
         self.vote_cast = d["vote_cast"]
         self.lis_member_id = d["lis_member_id"]
+
+def init_database(conn):
+    cursor = conn.cursor()
+    cursor.execute('''DROP TABLE IF EXISTS vote''')
+    cursor.execute('''DROP TABLE IF EXISTS rollcall''')
+    cursor.execute('''CREATE TABLE rollcall 
+        (id varchar(20) PRIMARY KEY,
+         url text,
+         congress integer,
+         session integer,
+         congress_year integer,
+         vote_number integer,
+         vote_date timestamp,
+         vote_title text,
+         vote_document_text text,
+         majority_requirement varchar(10),
+         vote_result text,
+         count_yea integer,
+         count_nay integer,
+         count_abstain integer DEFAULT 0,
+         tie_breaker_whom text,
+         tie_breaker_vote text
+         );
+        ''')
+    cursor.execute('''CREATE TABLE vote
+        (rollcall_id varchar(20) references rollcall(id),
+         first_name varchar(30),
+         last_name varchar(30),
+         party varchar(10),
+         state varchar(10),
+         vote_cast varchar(20),
+         lis_member_id varchar(10)
+        );''')
+    conn.commit()
 
 def try_get_request(url, n=1, wait=1, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36'}):
     for i in xrange(n):
@@ -127,10 +161,47 @@ def scrape():
         root = ET.fromstring(r.text)
         # parse xml, extract roll call information
         rollcalls.append(parse_roll_call(link, root))
-    # save roll call to database
-    with open("dump.pickle", "w") as f:
-        pickle.dump(rollcalls, f)
-    print "Dumped to file"
+    return rollcalls
 
-scrape_init()
-scrape()
+
+def populate_database(conn):
+    rollcalls = scrape()
+    cursor = conn.cursor()
+    for rc in rollcalls:
+        # save rollcall to rollcall table
+        cursor.execute('''INSERT INTO rollcall
+            (id, url, congress, session, congress_year, vote_number, vote_date,
+             vote_title, vote_document_text, majority_requirement, vote_result,
+             count_yea, count_nay, count_abstain, tie_breaker_whom, tie_breaker_vote)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);''',
+            (rc.id, rc.url, rc.congress, rc.session, rc.congress_year, rc.vote_number,
+             rc.vote_date, rc.vote_title, rc.vote_document_text, rc.majority_requirement,
+             rc.vote_result, rc.count["yeas"], rc.count["nays"], rc.count["absent"],
+             rc.tie_breaker["by_whom"], rc.tie_breaker["tie_breaker_vote"]))
+        for v in rc.members:
+            cursor.execute('''INSERT INTO vote
+                (rollcall_id, first_name, last_name, party, state, vote_cast, lis_member_id)
+                VALUES (%s,%s,%s,%s,%s,%s,%s);''',
+                (rc.id, v.first_name, v.last_name, v.party, v.state, v.vote_cast, v.lis_member_id))
+        conn.commit()
+
+
+
+
+#scrape_init()
+#scrape()
+#populate_database()
+
+# initialize the connection with our database
+urlparse.uses_netloc.append("postgres")
+url = urlparse.urlparse(os.environ["DATABASE_URL"])
+
+conn = psycopg2.connect(
+    database=url.path[1:],
+    user=url.username,
+    password=url.password,
+    host=url.hostname,
+    port=url.port
+)
+init_database(conn)
+populate_database(conn)
