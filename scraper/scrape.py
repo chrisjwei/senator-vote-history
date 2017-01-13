@@ -169,7 +169,6 @@ def scrape(links):
         rollcalls.append(parse_roll_call(link, root))
     return rollcalls
 
-
 def populate_database(conn, rollcalls):
     cursor = conn.cursor()
     for rc in rollcalls:
@@ -212,7 +211,7 @@ def update_database(conn):
 
 
 # updates database with new rollcalls
-def scrape_main():
+def scrape_main(init=False):
     urlparse.uses_netloc.append("postgres")
     url = urlparse.urlparse(os.environ.get("DATABASE_URL", "postgresql://postgres:password@localhost/svh"))
 
@@ -223,7 +222,11 @@ def scrape_main():
         host=url.hostname,
         port=url.port
     )
-
+    
+    # Drop all tables and start from fresh
+    if (init):
+        init_database(conn)
     update_database(conn)
+
 
 scrape_main()
