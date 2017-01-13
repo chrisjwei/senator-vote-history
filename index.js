@@ -1,4 +1,5 @@
 var pg = require('pg');
+pg.defaults.ssl = true;
 
 var express = require('express');
 var app = express();
@@ -19,51 +20,47 @@ app.get('/', function (request, response) {
 
 app.get('/results', function (request, response) {
     state = request.param('state')
-    if (STATES.includes(state)){
-        pg.connect(process.env.DATABASE_URL || 'postgres://postgres:password@localhost:5432/svh', function(err, client) {
-            client.query("SELECT id, url, congress, session, congress_year, vote_number, to_char(vote_date, 'MM/DD/YY HH:MI AM') as vote_date, vote_title, \
-                                 vote_document_text, majority_requirement, vote_result, count_yea, count_nay, \
-                                 count_abstain, tie_breaker_whom, tie_breaker_vote, \
-                                 total_r_yea, total_r_nay, total_r_abstain, total_d_yea, total_d_nay, total_d_abstain, \
-                                 total_i_yea, total_i_nay, total_i_abstain, \
-                                 " + state + "0 as vote_0, " + state + "1 as vote_1 \
-                                 FROM rollcall \
-                                 ORDER BY vote_date DESC;", function(err, result_rc) {
-                if (err) {
-                    console.error(err); response.send("Error " + err);
-                }
-                else {
-                    console.log("most recent " + result_rc.rows[0].id)
-                    client.query("SELECT first_name, last_name, party, bioguide_id, column_designation, \
-                        address, phone, email, website \
-                        FROM senator \
-                        WHERE state=$1 \
-                        ORDER BY column_designation ASC", [state], function(err, result_sen){
-                            if (err) {
-                                console.error(err); response.send("Error " + err);
-                            } else {
-                                client.query("SELECT to_char(updated,'MM/DD/YY HH:MI AM') as updated FROM log LIMIT 1;", function(err, result_updated){
-                                    if (err) {
-                                        console.error(err); response.send("Error " + err);
-                                    } else {
-                                        console.log(result_updated.rows[0].updated)
-                                        response.render('pages/results', 
-                                        {
-                                            results: result_rc.rows,
-                                            senators: result_sen.rows,
-                                            state: state,
-                                            last_updated: result_updated.rows[0].updated
-                                        });
-                                    } 
-                                });
-                            }
-                        })
-                }
-            });
+    pg.connect(process.env.DATABASE_URL, function(err, client) {
+        client.query("SELECT id, url, congress, session, congress_year, vote_number, to_char(vote_date, 'MM/DD/YY HH:MI AM') as vote_date, vote_title, \
+                             vote_document_text, majority_requirement, vote_result, count_yea, count_nay, \
+                             count_abstain, tie_breaker_whom, tie_breaker_vote, \
+                             total_r_yea, total_r_nay, total_r_abstain, total_d_yea, total_d_nay, total_d_abstain, \
+                             total_i_yea, total_i_nay, total_i_abstain, \
+                             " + state + "0 as vote_0, " + state + "1 as vote_1 \
+                             FROM rollcall \
+                             ORDER BY vote_date DESC;", function(err, result_rc) {
+            if (err) {
+                console.error(err); response.send("Error " + err);
+            }
+            else {
+                console.log("most recent " + result_rc.rows[0].id)
+                client.query("SELECT first_name, last_name, party, bioguide_id, column_designation, \
+                    address, phone, email, website \
+                    FROM senator \
+                    WHERE state=$1 \
+                    ORDER BY column_designation ASC", [state], function(err, result_sen){
+                        if (err) {
+                            console.error(err); response.send("Error " + err);
+                        } else {
+                            client.query("SELECT to_char(updated,'MM/DD/YY HH:MI AM') as updated FROM log LIMIT 1;", function(err, result_updated){
+                                if (err) {
+                                    console.error(err); response.send("Error " + err);
+                                } else {
+                                    console.log(result_updated.rows[0].updated)
+                                    response.render('pages/results', 
+                                    {
+                                        results: result_rc.rows,
+                                        senators: result_sen.rows,
+                                        state: state,
+                                        last_updated: result_updated.rows[0].updated
+                                    });
+                                } 
+                            });
+                        }
+                    })
+            }
         });
-    } else {
-        response.send("404 not found")
-    }
+    });
 });
 
 app.get('/about', function(request, response){
