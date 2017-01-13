@@ -3,7 +3,6 @@ import re
 import time
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
-import pickle
 import psycopg2
 import urlparse
 import os
