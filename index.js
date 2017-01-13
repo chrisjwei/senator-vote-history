@@ -34,6 +34,19 @@ app.get('/', function (request, response) {
     response.render('pages/index', { states: STATES })
 });
 
+app.get('/test', function(request, response){
+    pool.connect(function(err, client) {
+        client.query("SELECT id FROM rollcall;", function(err, result){
+            if (err) {
+                console.error(err); response.send("Error " + err);
+            } else {
+                response.send(result.rows) 
+            }
+        })
+        
+    })
+}
+
 app.get('/results', function (request, response) {
     state = request.param('state')
     pool.connect(function(err, client) {
@@ -54,7 +67,7 @@ app.get('/results', function (request, response) {
                     address, phone, email, website \
                     FROM senator \
                     WHERE state=$1 \
-                    ORDER BY column_designation ASC", [state], function(err, result_sen){
+                    ORDER BY column_designation ASC;", [state], function(err, result_sen){
                         if (err) {
                             console.error(err); response.send("Error " + err);
                         } else {
