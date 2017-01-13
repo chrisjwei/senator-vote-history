@@ -257,7 +257,10 @@ def update_database(conn):
     # get all the urls from the target url (115th congress first session)
     target_url = "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_115_1.htm"
     print "Updating database targeting %s" % target_url
-    all_urls = get_all_links_from_page(target_url, rollcall_regex)
+    try:
+        all_urls = get_all_links_from_page(target_url, rollcall_regex)
+    except RequestFailedException as e:
+        return { "new_rollcalls": 0, "status": RequestFailedException.message }
     ids = [RollCall.rollcall_to_id(*RollCall.extract_rollcall_from_url(url)) for url in all_urls]
     new_urls = []
     for (i, url) in zip(ids, all_urls):
@@ -268,12 +271,19 @@ def update_database(conn):
             new_urls.append("https://www.senate.gov" + url)
     print "Found %d new rollcalls to populate" % len(new_urls)
     # scrape all the new urls and populate database with them
-    rollcalls = scrape(new_urls)
+    try:
+        rollcalls = scrape(new_urls)
+    except RequestFailedException as e:
+        return { "new_rollcalls": 0, "status": RequestFailedException.message }
     populate_database(conn, rollcalls)
     # update the last updated time
     cursor.execute('''DELETE FROM log; INSERT INTO log (updated) VALUES (NOW() AT TIME ZONE 'EST');''')
     conn.commit()
+    return { "new_rollcalls": len(rollcalls), "status": "success" }
 
+def update_snitch(diagnostics):
+    message = str(diagnostics)
+    requests.post("https://nosnch.in/759e262024", data = { "m" : message })
 
 # updates database with new rollcalls
 def scrape_main(init=False):
@@ -291,6 +301,7 @@ def scrape_main(init=False):
     # Drop all tables and start from fresh
     if (init):
         init_database(conn)
-    update_database(conn)
+    diagnostics = update_database(conn)
+    update_snitch(diagnostics)
 
 scrape_main()
