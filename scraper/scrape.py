@@ -260,7 +260,7 @@ def update_database(conn):
     try:
         all_urls = get_all_links_from_page(target_url, rollcall_regex)
     except RequestFailedException as e:
-        return { "new_rollcalls": 0, "status": RequestFailedException.message }
+        return { "new_rollcalls": 0, "status": e.message }
     ids = [RollCall.rollcall_to_id(*RollCall.extract_rollcall_from_url(url)) for url in all_urls]
     new_urls = []
     for (i, url) in zip(ids, all_urls):
@@ -274,7 +274,7 @@ def update_database(conn):
     try:
         rollcalls = scrape(new_urls)
     except RequestFailedException as e:
-        return { "new_rollcalls": 0, "status": RequestFailedException.message }
+        return { "new_rollcalls": 0, "status": e.message }
     populate_database(conn, rollcalls)
     # update the last updated time
     cursor.execute('''DELETE FROM log; INSERT INTO log (updated) VALUES (NOW() AT TIME ZONE 'EST');''')
