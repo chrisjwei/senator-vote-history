@@ -5,10 +5,25 @@
 </head>
 
 <body>
-<% include ../partials/nav.ejs %>
-    <div class="container">
-        <h1>Senator Voting History</h1>
-        <h2> View the voting history of your state's senator in the U.S. 113th Congress </h2>
+    <div class="banner jumbotron">
+        <div class="banner-align rounded">
+            <div class="container">
+                <h1>Senator Voting History</h1>
+                    <h2> View the voting history of your state's senator in the U.S. 115th Congress </h2>
+                    <h2>
+                        <div class="btn-group">
+                        <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">Select your state<span class="caret"></span></button>
+                        <ul class="dropdown-menu scrollable-menu" role="menu">
+                            <% states.forEach(function(s) { %>
+                            <li><a href="/results?state=<%= s %>"><%= s %></a></li>
+                            <% }); %>
+                        </ul>
+                        </div>
+                    </h2>
+            </div>
+        </div>
     </div>
+
+    
 </body>
 </html>

@@ -6,21 +6,141 @@
 
 <body>
 <% include ../partials/nav.ejs %>
+<%
+vote_to_text = function(vote) {
+    switch (vote){
+        case 0:
+            return "voted Yea"
+        case 1:
+            return "voted Nay"
+        case 2:
+            return "abstained"
+        default:
+            return "UNKNOWN"
+    }
+}
+
+vote_to_style = function(vote){
+    switch (vote){
+        case 0:
+            return "bs-callout-success"
+        case 1:
+            return "bs-callout-danger"
+        default:
+            return "bs-callout-default"
+    }
+}
+
+votes_to_style = function(vote1, vote2) {
+    if (vote1 == vote2){
+        return vote_to_style(vote1)
+    }
+    if (vote1 == 2){
+        return vote_to_style(vote2)
+    }
+    if (vote2 == 2){
+        return vote_to_style(vote1)
+    }
+    return "bs-callout-warning"
+}
+%>
 <div class="container">
+
+<div class="jumbotron">
+  <h1 class="display-3"><%= state %> State Senators</h1>
+  <p class="lead"> 115th Congress of the United States of America </p>
+  <hr>
+  <div class="row">
+<% senators.forEach(function(s) { %>
+    <div class="col-md-2">
+    <img style="width:100%" src="http://bioguide.congress.gov/bioguide/photo/<%= s.bioguide_id[0] %>/<%= s.bioguide_id %>.jpg">
+    </div>
+    <div class="col-md-4">
+    <h3><%= s.first_name %> <%= s.last_name %> (<%= s.party %>) </h3>
+    <ul class="list-unstyled">
+        <li> <span class="glyphicon glyphicon-home"></span> <%= s.address %> </li>
+        <li> <span class="glyphicon glyphicon-earphone"></span> <%= s.phone %> </li>
+        <li> <span class="glyphicon glyphicon-envelope"></span> <%= s.email %> </li>
+        <li> <span class="glyphicon glyphicon-link"></span> <%= s.website %> </li>
+    </ul>
+    </div>
+<%}); %>
+</div>
+</div>
+
+<h2> Voting History </h2>
+
 <% results.forEach(function(r) { %>
-        <% if (r.vote_cast == "Yea"){ %>
-            <div class="panel panel-success">
-        <%} else if (r.vote_cast == "Nay"){ %>
-            <div class="panel panel-danger">
-        <%} else {%>
-            <div class="panel panel-default">
-        <% } %>
-            <div class="panel-heading"><b><%= r.first_name %> <%= r.last_name %> </b> voted <b> <%= r.vote_cast %> </b> to</div>
-            <div class="panel-body">
-                <a href="<%= r.url %>"><h4><%= r.vote_title %></h4></a>
-                <p><%= r.vote_document_text %></p>
+    <div class="bs-callout <%= votes_to_style(r.vote_0, r.vote_1) %>">
+        <p><%= r.vote_date %></p>
+        <div class="row">
+            <div class="col-md-8">
+
+            <a href="<%= r.url %>"><h4><%= r.vote_title %></h4></a>
+            <p><%= r.vote_document_text %></p>
             </div>
-        </div>            
+            <div class="col-md-4">
+            <h4> (<%= r.count_yea %> to <%= r.count_nay %>) <%= r.vote_result %></h4>
+            <h5>
+            <%= r.majority_requirement %> needed
+            </h5>
+
+            <table class="table table-bordered">
+                <thead>
+                  <tr>
+                    <th>Party</th>
+                    <th>Y</th>
+                    <th>N</th>
+                    <th>A</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><%= senators[0].last_name %> (<%= senators[0].party %>)</td>
+                    <td><% if (r.vote_0 == 0){%> X <% } %> </td>
+                    <td><% if (r.vote_0 == 1){%> X <% } %> </td>
+                    <td><% if (r.vote_0 == 2){%> X <% } %> </td>
+                  </tr>
+                </tbody>
+                <tbody>
+                  <tr>
+                    <td><%= senators[1].last_name %> (<%= senators[1].party %>)</td>
+                    <td><% if (r.vote_1 == 0){%> X <% } %> </td>
+                    <td><% if (r.vote_1 == 1){%> X <% } %> </td>
+                    <td><% if (r.vote_1 == 2){%> X <% } %> </td>
+                  </tr>
+                </tbody>
+                <tbody>
+                  <tr>
+                    <td>Democrats</td>
+                    <td><%= r.total_d_yea %></td>
+                    <td><%= r.total_d_nay %></td>
+                    <td><%= r.total_d_abstain %></td>
+                  </tr>
+                </tbody>
+                <tbody>
+                  <tr>
+                    <td>Republicans</td>
+                    <td><%= r.total_r_yea %></td>
+                    <td><%= r.total_r_nay %></td>
+                    <td><%= r.total_r_abstain %></td>
+                  </tr>
+                </tbody>
+                <tbody>
+                  <tr>
+                    <td>Independents</td>
+                    <td><%= r.total_i_yea %></td>
+                    <td><%= r.total_i_nay %></td>
+                    <td><%= r.total_i_abstain %></td>
+                  </tr>
+                </tbody>
+            </table>
+
+            </div>
+        </div>
+        
+        
+    </div>    
 <% }); %>
 </div>
 </body>

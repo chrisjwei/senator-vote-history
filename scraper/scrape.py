@@ -76,6 +76,7 @@ def init_database(conn):
     cursor = conn.cursor()
     cursor.execute('''DROP TABLE IF EXISTS senator''')
     cursor.execute('''DROP TABLE IF EXISTS rollcall''')
+    cursor.execute('''DROP TABLE IF EXISTS log''')
     columns = ["id varchar(20) PRIMARY KEY",
                "url text",
                "congress integer",
@@ -140,6 +141,7 @@ def init_database(conn):
                        s["bioguide_id"],
                        s["column_designation"]) for s in senators]
     cursor.executemany("INSERT INTO senator VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", senator_values)
+    cursor.execute('''CREATE TABLE log (updated timestamp);''')
     conn.commit()
 
 def get_all_links_from_page(base_url, regex=".*"):
@@ -268,6 +270,9 @@ def update_database(conn):
     # scrape all the new urls and populate database with them
     rollcalls = scrape(new_urls)
     populate_database(conn, rollcalls)
+    # update the last updated time
+    cursor.execute('''DELETE FROM log; INSERT INTO log (updated) VALUES (now());''')
+    conn.commit()
 
 
 # updates database with new rollcalls
@@ -288,4 +293,4 @@ def scrape_main(init=False):
         init_database(conn)
     update_database(conn)
 
-scrape_main()
+scrape_main(True)
