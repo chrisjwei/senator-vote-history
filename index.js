@@ -15,7 +15,7 @@ const config = {
     ssl: true
 };
 
-const pool = new Pool(config);
+const pool = new pg.Pool(config);
 
 var express = require('express');
 var app = express();
