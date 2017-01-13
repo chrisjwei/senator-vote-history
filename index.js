@@ -34,18 +34,6 @@ app.get('/', function (request, response) {
     response.render('pages/index', { states: STATES })
 });
 
-app.get('/test', function(request, response){
-    pool.connect(function(err, client) {
-        client.query("SELECT id FROM rollcall;", function(err, result){
-            if (err) {
-                console.error(err); response.send("Error " + err);
-            } else {
-                response.send(result.rows) 
-            }
-        });
-    });
-});
-
 app.get('/results', function (request, response) {
     state = request.param('state')
     pool.connect(function(err, client) {
@@ -56,7 +44,8 @@ app.get('/results', function (request, response) {
                              total_i_yea, total_i_nay, total_i_abstain, \
                              " + state + "0 as vote_0, " + state + "1 as vote_1 \
                              FROM rollcall \
-                             ORDER BY vote_date DESC;", function(err, result_rc) {
+                             ORDER BY congress, session, vote_number DESC \
+                             LIMIT 10;", function(err, result_rc) {
             if (err) {
                 console.error(err); response.send("Error " + err);
             }
