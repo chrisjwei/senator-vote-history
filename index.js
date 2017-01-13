@@ -42,10 +42,9 @@ app.get('/test', function(request, response){
             } else {
                 response.send(result.rows) 
             }
-        })
-        
-    })
-}
+        });
+    });
+});
 
 app.get('/results', function (request, response) {
     state = request.param('state')
