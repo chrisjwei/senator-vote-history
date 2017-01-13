@@ -34,6 +34,7 @@ app.get('/results', function (request, response) {
                     console.error(err); response.send("Error " + err);
                 }
                 else {
+                    console.log("most recent " + result_rc.rows[0].id)
                     client.query("SELECT first_name, last_name, party, bioguide_id, column_designation, \
                         address, phone, email, website \
                         FROM senator \
