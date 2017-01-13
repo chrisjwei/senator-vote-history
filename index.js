@@ -28,8 +28,7 @@ app.get('/results', function (request, response) {
                                  total_i_yea, total_i_nay, total_i_abstain, \
                                  " + state + "0 as vote_0, " + state + "1 as vote_1 \
                                  FROM rollcall \
-                                 ORDER BY vote_date DESC \
-                                 LIMIT 10;", function(err, result_rc) {
+                                 ORDER BY vote_date DESC;", function(err, result_rc) {
                 if (err) {
                     console.error(err); response.send("Error " + err);
                 }
