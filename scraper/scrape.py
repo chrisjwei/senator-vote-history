@@ -9,6 +9,10 @@ import os
 
 rollcall_regex = r"\/legislative\/LIS\/roll_call_lists\/roll_call_vote_cfm\.cfm\?congress=[0-9]+&session=[0-9]+&vote=[0-9]+"
 vote_menu_regex = r"\/legislative\/LIS\/roll_call_lists\/vote_menu_[0-9]+_[0-9]+\.htm"
+senator_info_url = "http://www.senate.gov/general/contact_information/senators_cfm.xml"
+
+
+STATES = ['AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VA', 'VT', 'WA', 'WI', 'WV', 'WY']
 
 class RequestFailedException(Exception):
     pass
@@ -47,42 +51,14 @@ class Vote(object):
         self.first_name = d["first_name"]
         self.party = d["party"]
         self.state = d["state"]
-        self.vote_cast = d["vote_cast"]
+        if d["vote_cast"] == "Yea":
+            vote = 0
+        elif d["vote_cast"] == "Nay":
+            vote = 1
+        else:
+            vote = 2
+        self.vote_cast = vote
         self.lis_member_id = d["lis_member_id"]
-
-def init_database(conn):
-    cursor = conn.cursor()
-    cursor.execute('''DROP TABLE IF EXISTS vote''')
-    cursor.execute('''DROP TABLE IF EXISTS rollcall''')
-    cursor.execute('''CREATE TABLE rollcall 
-        (id varchar(20) PRIMARY KEY,
-         url text,
-         congress integer,
-         session integer,
-         congress_year integer,
-         vote_number integer,
-         vote_date timestamp,
-         vote_title text,
-         vote_document_text text,
-         majority_requirement varchar(10),
-         vote_result text,
-         count_yea integer,
-         count_nay integer,
-         count_abstain integer DEFAULT 0,
-         tie_breaker_whom text,
-         tie_breaker_vote text
-         );
-        ''')
-    cursor.execute('''CREATE TABLE vote
-        (rollcall_id varchar(20) references rollcall(id),
-         first_name varchar(30),
-         last_name varchar(30),
-         party varchar(10),
-         state varchar(10),
-         vote_cast varchar(20),
-         lis_member_id varchar(10)
-        );''')
-    conn.commit()
 
 def try_get_request(url, n=1, wait=1, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36'}):
     for i in xrange(n):
@@ -94,6 +70,77 @@ def try_get_request(url, n=1, wait=1, headers={'User-Agent': 'Mozilla/5.0 (Windo
         print "(try %d/%d) Request failed for %s with status code %d... sleeping %ds" % (i+1, n, url, r.status_code, wait)
         time.sleep(wait)
     raise RequestFailedException(r.status_code)
+
+def init_database(conn):
+    print "Initializing Database"
+    cursor = conn.cursor()
+    cursor.execute('''DROP TABLE IF EXISTS senator''')
+    cursor.execute('''DROP TABLE IF EXISTS rollcall''')
+    columns = ["id varchar(20) PRIMARY KEY",
+               "url text",
+               "congress integer",
+               "session integer",
+               "congress_year integer",
+               "vote_number integer",
+               "vote_date timestamp",
+               "vote_title text",
+               "vote_document_text text",
+               "majority_requirement varchar(10)",
+               "vote_result text",
+               "count_yea integer",
+               "count_nay integer",
+               "count_abstain integer DEFAULT 0",
+               "tie_breaker_whom text",
+               "tie_breaker_vote text"]
+    for state in STATES:
+        for senator in [0,1]:
+            columns.append("%s%d integer NOT NULL" % (state, senator))
+    for party in ["D", "R", "I"]:
+            for vote in ["yea","nay","abstain"]:
+                columns.append("total_%s_%s integer DEFAULT 0" % (party, vote))
+    column_sql = ",".join(columns)
+    cursor.execute('''CREATE TABLE rollcall (%s);''' % column_sql)
+    # create a table for all the senators
+    cursor.execute('''CREATE TABLE senator
+        (first_name varchar(30),
+         last_name varchar(30),
+         party varchar(10),
+         state varchar(10),
+         address text,
+         phone varchar(20),
+         email text,
+         website text,
+         bioguide_id varchar(10),
+         column_designation varchar(5)
+        );''')
+    # fetch all senator information
+    print "Fetching senator information..."
+    r = try_get_request(senator_info_url)
+    root = ET.fromstring(r.text.encode('utf-8'))
+    senators = []
+    designation_counter = dict.fromkeys(STATES, 0)
+    for element in root:
+        if element.tag == "member":
+            senator = extract_from_xml(element, 
+                ["first_name", "last_name", "party", "state", "address",
+                 "phone", "email", "website", "bioguide_id"])
+            designation = designation_counter[senator["state"]]
+            senator["column_designation"] = "%s%d" % (senator["state"], designation)
+            designation_counter[senator["state"]] += 1
+            senators.append(senator)
+    print "Found %d/100 senators" % len(senators)
+    senator_values = [(s["first_name"],
+                       s["last_name"],
+                       s["party"],
+                       s["state"],
+                       s["address"],
+                       s["phone"],
+                       s["email"],
+                       s["website"],
+                       s["bioguide_id"],
+                       s["column_designation"]) for s in senators]
+    cursor.executemany("INSERT INTO senator VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", senator_values)
+    conn.commit()
 
 def get_all_links_from_page(base_url, regex=".*"):
     r = try_get_request(base_url)
@@ -125,7 +172,7 @@ def scrape_init():
     return sorted(sub_urls)
 
 def extract_from_xml(root, keys):
-    result = dict.fromkeys(keys, None)
+    result = dict.fromkeys(keys, "NULL")
     for element in root:
         if (element.tag in result):
             result[element.tag] = element.text
@@ -171,23 +218,36 @@ def scrape(links):
 
 def populate_database(conn, rollcalls):
     cursor = conn.cursor()
+    # load senator data from database, since we need to know the right column
+    cursor.execute("SELECT last_name, state, column_designation FROM senator")
+    senator_lookup = {(last_name, state):column_designation for (last_name, state, column_designation) in cursor.fetchall()}
     for rc in rollcalls:
         print "Populating database with id %s" % rc.id
-        # save rollcall to rollcall table
-        cursor.execute('''INSERT INTO rollcall
-            (id, url, congress, session, congress_year, vote_number, vote_date,
-             vote_title, vote_document_text, majority_requirement, vote_result,
-             count_yea, count_nay, count_abstain, tie_breaker_whom, tie_breaker_vote)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);''',
-            (rc.id, rc.url, rc.congress, rc.session, rc.congress_year, rc.vote_number,
-             rc.vote_date, rc.vote_title, rc.vote_document_text, rc.majority_requirement,
-             rc.vote_result, rc.count["yeas"], rc.count["nays"], rc.count["absent"],
-             rc.tie_breaker["by_whom"], rc.tie_breaker["tie_breaker_vote"]))
+        party_count = {"D":[0,0,0], "R":[0,0,0], "I":[0,0,0]}
+        columns = ["id", "url", "congress", "session", "congress_year", "vote_number", "vote_date",
+                   "vote_title", "vote_document_text", "majority_requirement", "vote_result",
+                   "count_yea", "count_nay", "count_abstain", "tie_breaker_whom", "tie_breaker_vote"]
+        values = [rc.id, rc.url, rc.congress, rc.session, rc.congress_year, rc.vote_number,
+                  rc.vote_date, rc.vote_title, rc.vote_document_text, rc.majority_requirement,
+                  rc.vote_result, rc.count["yeas"], rc.count["nays"], rc.count["absent"],
+                  rc.tie_breaker["by_whom"], rc.tie_breaker["tie_breaker_vote"]]
         for v in rc.members:
-            cursor.execute('''INSERT INTO vote
-                (rollcall_id, first_name, last_name, party, state, vote_cast, lis_member_id)
-                VALUES (%s,%s,%s,%s,%s,%s,%s);''',
-                (rc.id, v.first_name, v.last_name, v.party, v.state, v.vote_cast, v.lis_member_id))
+            column_designation = senator_lookup[(v.last_name, v.state)]
+            columns.append(column_designation)
+            values.append(v.vote_cast)
+            if v.party in party_count:
+                party_count[v.party][v.vote_cast] += 1
+            else:
+                party_count["I"][v.vote_cast] += 1
+
+        for party in ["D", "R", "I"]:
+            for i, vote in enumerate(["yea","nay","abstain"]):
+                columns.append("total_%s_%s" % (party, vote))
+                values.append(party_count[party][i])
+
+        column_sql = ",".join(columns)
+        value_sql = ",".join(["%s"]*len(columns))
+        cursor.execute('''INSERT INTO rollcall (%s) VALUES (%s);''' % (column_sql, value_sql), values)
         conn.commit()
 
 def update_database(conn):
@@ -227,6 +287,5 @@ def scrape_main(init=False):
     if (init):
         init_database(conn)
     update_database(conn)
-
 
 scrape_main()
