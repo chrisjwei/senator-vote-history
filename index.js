@@ -1,6 +1,22 @@
 var pg = require('pg');
 pg.defaults.ssl = true;
 
+const url = require('url')
+
+const params = url.parse(process.env.DATABASE_URL);
+const auth = params.auth.split(':');
+
+const config = {
+    user: auth[0],
+    password: auth[1],
+    host: params.hostname,
+    port: params.port,
+    database: params.pathname.split('/')[1],
+    ssl: true
+};
+
+const pool = new Pool(config);
+
 var express = require('express');
 var app = express();
 
@@ -20,7 +36,7 @@ app.get('/', function (request, response) {
 
 app.get('/results', function (request, response) {
     state = request.param('state')
-    pg.connect(process.env.DATABASE_URL, function(err, client) {
+    pool.connect(function(err, client) {
         client.query("SELECT id, url, congress, session, congress_year, vote_number, to_char(vote_date, 'MM/DD/YY HH:MI AM') as vote_date, vote_title, \
                              vote_document_text, majority_requirement, vote_result, count_yea, count_nay, \
                              count_abstain, tie_breaker_whom, tie_breaker_vote, \
@@ -64,7 +80,7 @@ app.get('/results', function (request, response) {
 });
 
 app.get('/about', function(request, response){
-    pg.connect(process.env.DATABASE_URL || 'postgres://postgres:password@localhost:5432/svh', function(err, client) {
+    pool.connect(function(err, client) {
         client.query("SELECT to_char(updated,'MM/DD/YY HH:MI AM') as updated FROM log LIMIT 1;", function(err, result){
             if (err){
                 console.error(err); response.send("Error " + err);
