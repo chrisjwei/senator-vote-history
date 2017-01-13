@@ -271,7 +271,7 @@ def update_database(conn):
     rollcalls = scrape(new_urls)
     populate_database(conn, rollcalls)
     # update the last updated time
-    cursor.execute('''DELETE FROM log; INSERT INTO log (updated) VALUES (now());''')
+    cursor.execute('''DELETE FROM log; INSERT INTO log (updated) VALUES (NOW() AT TIME ZONE 'EST');''')
     conn.commit()
 
 
