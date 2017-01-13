@@ -8,13 +8,24 @@ import psycopg2
 import urlparse
 import os
 
+rollcall_regex = r"\/legislative\/LIS\/roll_call_lists\/roll_call_vote_cfm\.cfm\?congress=[0-9]+&session=[0-9]+&vote=[0-9]+"
+vote_menu_regex = r"\/legislative\/LIS\/roll_call_lists\/vote_menu_[0-9]+_[0-9]+\.htm"
+
 class RequestFailedException(Exception):
     pass
 
 class RollCall(object):
-    {"congress", "session", "congress_year", "vote_number", "vote_date",
-                      "vote_title", "vote_document_text", "majority_requirement", "vote_result",
-                      "count", "tie_breaker", "members"}
+    url_regex = re.compile(".*/legislative\/LIS\/roll_call_lists\/roll_call_vote_cfm\.cfm\?congress=([0-9]+)&session=([0-9]+)&vote=([0-9]+)")
+
+    @staticmethod
+    def extract_rollcall_from_url(url):
+        (congress_num, session_num, vote_num) = RollCall.url_regex.match(url).groups()
+        return (congress_num, session_num, vote_num)
+
+    @staticmethod
+    def rollcall_to_id(congress_num, session_num, vote_num):
+        return "%d-%d-%d" % (int(congress_num), int(session_num), int(vote_num))
+
     def __init__(self, url, d):
         self.url = url
         self.congress = int(d["congress"])
@@ -29,7 +40,7 @@ class RollCall(object):
         self.count = d["count"]
         self.tie_breaker = d["tie_breaker"]
         self.members = d["members"]
-        self.id = "%d-%d-%d" % (self.congress, self.session, self.vote_number)
+        self.id = RollCall.rollcall_to_id(d["congress"], d["session"], d["vote_number"])
 
 class Vote(object):
     def __init__(self, d):
@@ -105,17 +116,14 @@ def scrape_init():
     base_url = 'https://www.senate.gov'
     urls = get_all_links_from_page(
         "https://www.senate.gov/pagelayout/legislative/a_three_sections_with_teasers/votes.htm",
-        "\/legislative\/LIS\/roll_call_lists\/vote_menu_[0-9]+_[0-9]+\.htm")
+        vote_menu_regex)
     urls = list(set(urls))
     sub_urls = []
     for url in urls:
-        new_urls = get_all_links_from_page(
-            base_url + url,
-            "\/legislative\/LIS\/roll_call_lists\/roll_call_vote_cfm\.cfm\?congress=[0-9]+&session=[0-9]+&vote=[0-9]+")
+        new_urls = get_all_links_from_page(base_url + url, rollcall_regex)
         sub_urls += [base_url + new_url for new_url in new_urls]
     print "Found %d links in total" % len(sub_urls)
-    with open("links.txt", "w") as f:
-        f.write("\n".join(sorted(sub_urls)))
+    return sorted(sub_urls)
 
 def extract_from_xml(root, keys):
     result = dict.fromkeys(keys, None)
@@ -149,26 +157,24 @@ def parse_roll_call(link, root):
     return RollCall(link, attribs)
 
 
-def scrape():
-    regex = re.compile("https:\/\/www\.senate\.gov\/legislative\/LIS\/roll_call_lists\/roll_call_vote_cfm\.cfm\?congress=([0-9]+)&session=([0-9]+)&vote=([0-9]+)")
+def scrape(links):
+    regex = re.compile(".*/legislative\/LIS\/roll_call_lists\/roll_call_vote_cfm\.cfm\?congress=([0-9]+)&session=([0-9]+)&vote=([0-9]+)")
     rollcalls = []
-    with open("links.txt", "r") as f:
-        links = f.read().split("\n")
     for (i, link) in enumerate(links):
         (congress_num, session_num, vote_num) = regex.match(link).groups()
         print "Scraping %s-%s-%s (%d/%d)" % (congress_num, session_num, vote_num, i+1, len(links))
         xml_link = "https://www.senate.gov/legislative/LIS/roll_call_votes/vote%s%s/vote_%s_%s_%s.xml" % (congress_num, session_num, congress_num, session_num, vote_num)
         r = try_get_request(xml_link, n=100, wait=10)
-        root = ET.fromstring(r.text)
+        root = ET.fromstring(r.text.encode('utf-8'))
         # parse xml, extract roll call information
         rollcalls.append(parse_roll_call(link, root))
     return rollcalls
 
 
-def populate_database(conn):
-    rollcalls = scrape()
+def populate_database(conn, rollcalls):
     cursor = conn.cursor()
     for rc in rollcalls:
+        print "Populating database with id %s" % rc.id
         # save rollcall to rollcall table
         cursor.execute('''INSERT INTO rollcall
             (id, url, congress, session, congress_year, vote_number, vote_date,
@@ -186,15 +192,39 @@ def populate_database(conn):
                 (rc.id, v.first_name, v.last_name, v.party, v.state, v.vote_cast, v.lis_member_id))
         conn.commit()
 
-#urlparse.uses_netloc.append("postgres")
-#url = urlparse.urlparse(os.environ["DATABASE_URL"])
+def update_database(conn):
+    cursor = conn.cursor()
+    # get all the urls from the target url (115th congress first session)
+    target_url = "https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_115_1.htm"
+    print "Updating database targeting %s" % target_url
+    all_urls = get_all_links_from_page(target_url, rollcall_regex)
+    ids = [RollCall.rollcall_to_id(*RollCall.extract_rollcall_from_url(url)) for url in all_urls]
+    new_urls = []
+    for (i, url) in zip(ids, all_urls):
+        # check if rollcall exists or not
+        cursor.execute("SELECT 1 FROM rollcall WHERE id=%s", (i,))
+        exists = cursor.fetchone()
+        if not(exists):
+            new_urls.append("https://www.senate.gov" + url)
+    print "Found %d new rollcalls to populate" % len(new_urls)
+    # scrape all the new urls and populate database with them
+    rollcalls = scrape(new_urls)
+    populate_database(conn, rollcalls)
 
-conn = psycopg2.connect(
-    database=url.path[1:],
-    user=url.username,
-    password=url.password,
-    host=url.hostname,
-    port=url.port
-)
-init_database(conn)
-populate_database(conn)
+
+# updates database with new rollcalls
+def scrape_main():
+    urlparse.uses_netloc.append("postgres")
+    url = urlparse.urlparse(os.environ.get("DATABASE_URL", "postgresql://postgres:password@localhost/svh"))
+
+    conn = psycopg2.connect(
+        database=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+
+    update_database(conn)
+
+scrape_main()
