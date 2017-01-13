@@ -293,4 +293,4 @@ def scrape_main(init=False):
         init_database(conn)
     update_database(conn)
 
-scrape_main(True)
+scrape_main()
