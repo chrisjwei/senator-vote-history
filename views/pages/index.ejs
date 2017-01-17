@@ -15,7 +15,7 @@
                         <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">Select your state<span class="caret"></span></button>
                         <ul class="dropdown-menu scrollable-menu" role="menu">
                             <% states.forEach(function(s) { %>
-                            <li><a href="/results?state=<%= s %>"><%= s %></a></li>
+                            <li><a href="/results/<%= s %>"><%= s %></a></li>
                             <% }); %>
                         </ul>
                         </div>

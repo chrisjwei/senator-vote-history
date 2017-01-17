@@ -45,64 +45,68 @@ app.get('/', function (request, response) {
 
 app.get('/results/:state', function(request, response){
     var state = request.params.state;
-    pool.connect(function(err, client, done){
-        if (err){
-            console.log(err);
-            response.send("Error " + err);
-        } else {
-            var data_promise = new Promise(function (resolve, reject) {
-                client.query(
-                    "SELECT id, url, congress, session, congress_year, vote_number, to_char(vote_date, 'MM/DD/YY HH:MI AM') as vote_date, vote_title, \
-                     vote_document_text, majority_requirement, vote_result, count_yea, count_nay, \
-                     count_abstain, tie_breaker_whom, tie_breaker_vote, \
-                     total_r_yea, total_r_nay, total_r_abstain, total_d_yea, total_d_nay, total_d_abstain, \
-                     total_i_yea, total_i_nay, total_i_abstain, \
-                     " + state + "0 as vote_0, " + state + "1 as vote_1 \
-                     FROM rollcall \
-                     ORDER BY congress, session, vote_number DESC \
-                     LIMIT 10;",
-                    function (err, res) {
-                        if (err) reject(err);
-                        else resolve(res.rows);
-                    });
-            });
-            var senator_promise = new Promise(function (resolve, reject) {
-                client.query(
-                    "SELECT first_name, last_name, party, bioguide_id, column_designation, address, phone, email, website \
-                    FROM senator \
-                    WHERE state=$1 \
-                    ORDER BY column_designation ASC;", [state],
-                    function (err, res) {
-                        if (err) reject(err);
-                        else resolve(res.rows);
-                    });
-            });
-            var time_promise = new Promise(function (resolve, reject) {
-                client.query(
-                    "SELECT to_char(updated,'MM/DD/YY HH:MI AM') as updated FROM log LIMIT 1;",
-                    function (err, res) {
-                        if (err) resolve("Last updated could not be retrieved");
-                        else resolve(res.rows[0].updated);
-                    });
-            });
-            Promise.all([data_promise, senator_promise, time_promise])
-                .then(function(res){
-                    done();
-                    response.render('pages/results', 
-                    {
-                        results: res[0],
-                        senators: res[1],
-                        state: state,
-                        last_updated: res[2]
-                    });
-                })
-                .catch(function(err){
-                    done();
-                    console.log(err);
-                    response.send("Error "+ err)
-                })
-        }
-    });
+    if (!STATES.includes(state)){
+        response.send("Unknown state " + state);
+    } else{
+        pool.connect(function(err, client, done){
+            if (err){
+                console.log(err);
+                response.send("Error " + err);
+            } else {
+                var data_promise = new Promise(function (resolve, reject) {
+                    client.query(
+                        "SELECT id, url, congress, session, congress_year, vote_number, to_char(vote_date, 'MM/DD/YY HH:MI AM') as vote_date, vote_title, \
+                         vote_document_text, majority_requirement, vote_result, count_yea, count_nay, \
+                         count_abstain, tie_breaker_whom, tie_breaker_vote, \
+                         total_r_yea, total_r_nay, total_r_abstain, total_d_yea, total_d_nay, total_d_abstain, \
+                         total_i_yea, total_i_nay, total_i_abstain, \
+                         " + state + "0 as vote_0, " + state + "1 as vote_1 \
+                         FROM rollcall \
+                         ORDER BY congress, session, vote_number DESC \
+                         LIMIT 10;",
+                        function (err, res) {
+                            if (err) reject(err);
+                            else resolve(res.rows);
+                        });
+                });
+                var senator_promise = new Promise(function (resolve, reject) {
+                    client.query(
+                        "SELECT first_name, last_name, party, bioguide_id, column_designation, address, phone, email, website \
+                        FROM senator \
+                        WHERE state=$1 \
+                        ORDER BY column_designation ASC;", [state],
+                        function (err, res) {
+                            if (err) reject(err);
+                            else resolve(res.rows);
+                        });
+                });
+                var time_promise = new Promise(function (resolve, reject) {
+                    client.query(
+                        "SELECT to_char(updated,'MM/DD/YY HH:MI AM') as updated FROM log LIMIT 1;",
+                        function (err, res) {
+                            if (err) resolve("Last updated could not be retrieved");
+                            else resolve(res.rows[0].updated);
+                        });
+                });
+                Promise.all([data_promise, senator_promise, time_promise])
+                    .then(function(res){
+                        done();
+                        response.render('pages/results', 
+                        {
+                            results: res[0],
+                            senators: res[1],
+                            state: state,
+                            last_updated: res[2]
+                        });
+                    })
+                    .catch(function(err){
+                        done();
+                        console.log(err);
+                        response.send("Error "+ err)
+                    })
+            }
+        });
+    }
 });
 
 app.get('/about', function(request, response){
