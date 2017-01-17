@@ -4,7 +4,8 @@
   "description": "view the voting history of your senator",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
@@ -24,6 +25,7 @@
   "dependencies": {
     "ejs": "^2.5.5",
     "express": "^4.14.0",
-    "pg": "6.1.2"
+    "pg": "6.1.2",
+    "promise": "^7.1.1"
   }
 }

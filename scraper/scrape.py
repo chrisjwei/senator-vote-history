@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import requests
 import re
 import time
@@ -6,6 +8,7 @@ import xml.etree.ElementTree as ET
 import psycopg2
 import urlparse
 import os
+import sys
 
 rollcall_regex = r"\/legislative\/LIS\/roll_call_lists\/roll_call_vote_cfm\.cfm\?congress=[0-9]+&session=[0-9]+&vote=[0-9]+"
 vote_menu_regex = r"\/legislative\/LIS\/roll_call_lists\/vote_menu_[0-9]+_[0-9]+\.htm"
@@ -286,9 +289,12 @@ def update_snitch(diagnostics):
     requests.post("https://nosnch.in/759e262024", data = { "m" : message })
 
 # updates database with new rollcalls
-def scrape_main(init=False):
+def scrape_main(init):
     urlparse.uses_netloc.append("postgres")
-    url = urlparse.urlparse(os.environ.get("DATABASE_URL", "postgresql://postgres:password@localhost/svh"))
+    database = os.environ.get("DATABASE_URL")
+    if (database == None):
+        raise Exception("Could not find database from environment variables")
+    url = urlparse.urlparse(database)
 
     conn = psycopg2.connect(
         database=url.path[1:],
@@ -300,8 +306,13 @@ def scrape_main(init=False):
     
     # Drop all tables and start from fresh
     if (init):
+        print "Wiping old data, recreating tables"
         init_database(conn)
     diagnostics = update_database(conn)
     update_snitch(diagnostics)
 
-scrape_main()
+if __name__ == "__main__":
+    init=False
+    if (len(sys.argv) > 1 and sys.argv[1] == "new"):
+        init=True
+    scrape_main(init)
